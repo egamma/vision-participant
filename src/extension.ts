@@ -2,6 +2,9 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
+
 
 import * as dotenv from 'dotenv';
 import sharp from 'sharp';
@@ -9,6 +12,7 @@ import sharp from 'sharp';
 import OpenAI from 'openai';
 
 const VISION_PARTICIPANT_ID = 'chat-participant.vision';
+const VISION_PARTICIPANT_TMP_DIR = 'vison-participant'; 
 
 // prompts
 const SYSTEM_MESSAGE =
@@ -24,15 +28,33 @@ const SYSTEM_MESSAGE =
 // OPENAI_API_KEY can also be set in ~/.env
 dotenv.config({ path: `${os.homedir()}/.env` });
 
-const sample = '/Users/egamma/Projects/vision-participant/sample.png';
+const openai = new OpenAI();
 
 export function activate(context: vscode.ExtensionContext) {
 
 	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> => {
-		console.log('Request:', request);
 
-		const openai = new OpenAI();
-		const imageURL = await getDataURL(sample);
+		if (request.prompt === '') {
+			stream.markdown('Select an image and ask a question about it.');
+			return {};
+		}
+
+		let fileUri = await vscode.window.showOpenDialog({
+			canSelectMany: false,
+			filters: {
+				'Images': ['png']
+			}
+		});
+
+		if (!fileUri || !fileUri[0]) {
+			return {};
+		} 
+
+		let imageBuffer = fs.readFileSync(fileUri[0].fsPath);
+
+		const imageURL = await getDataURL(imageBuffer);
+		const smallImagePath = await createSmallImage(imageBuffer);
+		stream.markdown(`\n![image](file://${smallImagePath})\n\n`);
 		
 		const response = await openai.chat.completions.create({
 			model: "gpt-4-vision-preview",
@@ -61,6 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
 		for await (const part of response) {
 			stream.markdown(part.choices[0]?.delta?.content || '');
 		}
+
 		return {};
 	}
 
@@ -71,22 +94,35 @@ export function activate(context: vscode.ExtensionContext) {
 		visionParticipant
 	);
 
-	async function getDataURL(path: string): Promise<string> {
-		let imageBuffer = fs.readFileSync(path);
+	async function getDataURL(imageBuffer: Buffer): Promise<string> {
 		try {
 			let buffer = await sharp(imageBuffer).toBuffer();
 			let base64Image = buffer.toString('base64');
-
-			// Construct the data URL
 			let dataUrl = 'data:image/png;base64,' + base64Image;
-
-			console.log(dataUrl);
 			return dataUrl;
 		} catch (err) {
 			console.error(err);
 		}
 		return '';
 	}
+
+	async function createSmallImage(imageBuffer: Buffer): Promise<string> {
+		const tempFileWithoutExtension = getTmpFileName();
+        const smallFilePath = tempFileWithoutExtension + '-small.png';
+
+		await sharp(imageBuffer)
+            .resize({ width: 400 })
+            .toFile(smallFilePath);
+        return smallFilePath;
+	}
+
+	function getTmpFileName(): string {
+        const randomFileName = crypto.randomBytes(20).toString('hex');
+        const tempFileWithoutExtension = path.join(os.tmpdir(), VISION_PARTICIPANT_TMP_DIR, `${randomFileName}`);
+        const tempDir = path.dirname(tempFileWithoutExtension);
+        fs.mkdirSync(tempDir, { recursive: true });
+        return tempFileWithoutExtension;
+    }
 }
 
 export function deactivate() { }
