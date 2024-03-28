@@ -10,7 +10,8 @@ import * as dotenv from 'dotenv';
 import sharp from 'sharp';
 import OpenAI from 'openai';
 
-const VISION_PARTICIPANT_ID = 'chat-participant.vision';
+const VISION_PARTICIPANT_ID = 'vision-participant.particpant';
+const CHAT_ABOUT_IMAGE_COMMAND_ID = 'vision-participant.chatCommand';
 const VISION_PARTICIPANT_TMP_DIR = 'vison-participant';
 
 const SYSTEM_MESSAGE =
@@ -35,20 +36,33 @@ export function activate(context: vscode.ExtensionContext) {
 			stream.markdown('Enter the question about an image that you will then select.');
 			return {};
 		}
+		let finalPrompt = request.prompt;
+		let filePath = '';
 
-		let fileUri = await vscode.window.showOpenDialog({
-			canSelectMany: false,
-			filters: {
-				'Images': ['png']
+		// Check if the prompt contains an image path
+		// example: some text #image:src/sample.png some more text'
+		const imagePathRegex = /#image:\S+/;
+		const match = request.prompt.match(imagePathRegex);
+
+		if (match) {
+			filePath = match[0].replace('#image:', '');
+			// remove the path variable
+			finalPrompt = request.prompt.replace(match[0], '');
+		} else {
+			let fileUri = await vscode.window.showOpenDialog({
+				canSelectMany: false,
+				filters: {
+					'Images': ['png']
+				}
+			});
+
+			if (!fileUri || !fileUri[0]) {
+				return {};
 			}
-		});
-
-		if (!fileUri || !fileUri[0]) {
-			return {};
+			filePath = fileUri[0].fsPath;
 		}
 
-		let imageBuffer = fs.readFileSync(fileUri[0].fsPath);
-
+		let imageBuffer = fs.readFileSync(filePath);
 		const imageURL = await getDataURL(imageBuffer);
 		const smallImagePath = await createSmallImage(imageBuffer);
 		stream.markdown(`\n![image](file://${smallImagePath})\n\n`);
@@ -63,7 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
 				{
 					role: "user",
 					content: [
-						{ type: "text", text: `${request.prompt}` },
+						{ type: "text", text: `${finalPrompt}` },
 						{
 							type: "image_url",
 							image_url: {
@@ -74,7 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
 				},
 			],
 			stream: true,
-			max_tokens: 700,
+			max_tokens: 800,
 		});
 
 		for await (const part of response) {
@@ -88,8 +102,34 @@ export function activate(context: vscode.ExtensionContext) {
 	visionParticipant.iconPath = new vscode.ThemeIcon('eye');
 
 	context.subscriptions.push(
-		visionParticipant
+		visionParticipant,
+		vscode.commands.registerCommand(CHAT_ABOUT_IMAGE_COMMAND_ID, chatAboutImage)
 	);
+
+	async function chatAboutImage() {
+		let filePath = getFilePathOfImage();
+		
+		const commandId = 'workbench.action.chat.open';
+		const options = {
+			query: `@vision #image:${filePath} `,
+			isPartialQuery: true
+		};
+		await vscode.commands.executeCommand(commandId, options);
+	}
+
+	function getFilePathOfImage(): string | undefined {
+		const editor = vscode.window.activeTextEditor;
+		if (editor) {
+			return editor.document.uri.fsPath;
+		}
+		let tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+		if (tab) {
+			if (tab.input instanceof vscode.TabInputCustom) {
+				return tab.input.uri.fsPath;
+			}
+		}
+		return undefined
+	}
 
 	async function getDataURL(imageBuffer: Buffer): Promise<string> {
 		try {

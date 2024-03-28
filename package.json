@@ -21,12 +21,28 @@
     "contributes": {
         "chatParticipants": [
             {
-                "id": "chat-participant.vision",
+                "id": "vision-participant.particpant",
                 "name": "vision",
-                "description": "Select an image and chat about it",
+                "description": "Ask a question about an image",
                 "isSticky": false
             }
-        ]
+        ],
+        "commands": [
+            {
+                "command": "vision-participant.chatCommand",
+                "title": "Chat about image",
+                "icon": "$(copilot)"
+            }
+        ],
+        "menus": {
+            "editor/title": [
+                {
+                    "command": "vision-participant.chatCommand",
+                    "when": "resourceExtname == .png || resourceExtname == .jpg",
+                    "group": "navigation"
+                }
+            ]
+        }
     },
     "main": "./out/extension.js",
     "scripts": {

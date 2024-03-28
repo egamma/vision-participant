@@ -1,0 +1,2 @@
+- error handling
+- support .jpg, don't hardcode .png
