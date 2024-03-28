@@ -109,7 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(CHAT_ABOUT_IMAGE_COMMAND_ID, chatAboutImage)
 	);
 
-	async function chatAboutImage() {
+	async function chatAboutImage(): Promise<void> {
 		let filePath = getFilePathOfImage();
 
 		const commandId = 'workbench.action.chat.open';
@@ -160,7 +160,9 @@ export function activate(context: vscode.ExtensionContext) {
 		const randomFileName = crypto.randomBytes(20).toString('hex');
 		const tempFileWithoutExtension = path.join(os.tmpdir(), VISION_PARTICIPANT_TMP_DIR, `${randomFileName}`);
 		const tempDir = path.dirname(tempFileWithoutExtension);
-		fs.mkdirSync(tempDir, { recursive: true });
+		if (!fs.existsSync(tempDir)) {
+			fs.mkdirSync(tempDir, { recursive: true });
+		}
 		return tempFileWithoutExtension;
 	}
 }
