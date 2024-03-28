@@ -18,8 +18,8 @@ const SYSTEM_MESSAGE =
 	`You are a world class programmer.\n` +
 	`You help a programmer to answer programming questions.\n` +
 	`Please be concise and provide an answer and include code as needed.` +
-	`Answer the query in a freeform markdown-formatted response` +
 	// Format restrictions
+	`Answer the query in a freeform markdown-formatted response` +
 	`Restrict the format used in your answers as follows:\n` +
 	`1. Use Markdown formatting in your answers.\n` +
 	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
