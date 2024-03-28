@@ -19,6 +19,7 @@ const SYSTEM_MESSAGE =
 	`You help a programmer to answer programming questions.\n` +
 	`Please be concise and provide an answer and include code as needed.` +
 	`Answer the query in a freeform markdown-formatted response` +
+	// Format restrictions
 	`Restrict the format used in your answers as follows:\n` +
 	`1. Use Markdown formatting in your answers.\n` +
 	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
@@ -63,7 +64,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		let imageBuffer = fs.readFileSync(filePath);
-		const imageURL = await getDataURL(imageBuffer);
+		const imageDataURL = await getDataURL(imageBuffer);
 		const smallImagePath = await createSmallImage(imageBuffer);
 		stream.markdown(`\n![image](file://${smallImagePath})\n\n`);
 
@@ -77,11 +78,13 @@ export function activate(context: vscode.ExtensionContext) {
 				{
 					role: "user",
 					content: [
-						{ type: "text", text: `${finalPrompt}` },
+						{ 
+							type: "text", 
+							text: `${finalPrompt}` },
 						{
 							type: "image_url",
 							image_url: {
-								"url": imageURL,
+								"url": imageDataURL,
 							},
 						},
 					],
@@ -108,7 +111,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function chatAboutImage() {
 		let filePath = getFilePathOfImage();
-		
+
 		const commandId = 'workbench.action.chat.open';
 		const options = {
 			query: `@vision #image:${filePath} `,
