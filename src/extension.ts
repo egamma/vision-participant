@@ -66,7 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let imageBuffer = fs.readFileSync(filePath);
 		const imageDataURL = await getDataURL(imageBuffer);
 		const smallImagePath = await createSmallImage(imageBuffer);
-		stream.markdown(`\n![image](file://${smallImagePath})\n\n`);
+		stream.markdown(`\n![image](file://${smallImagePath})\n`);
 
 		const response = await openai.chat.completions.create({
 			model: "gpt-4-vision-preview",
