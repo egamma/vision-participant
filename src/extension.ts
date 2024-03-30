@@ -13,7 +13,7 @@ import OpenAI from 'openai';
 
 const VISION_PARTICIPANT_ID = 'vision-participant.particpant';
 const CHAT_ABOUT_IMAGE_COMMAND_ID = 'vision-participant.chatCommand';
-const PREVIEW_COMMAND_ID = 'vision-participant.preview';
+const PREVIEW_COMMAND_ID = 'vision-participant.previewCommand';
 
 const VISION_PARTICIPANT_TMP_DIR = 'vison-participant';
 
@@ -41,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<VisionChatResult> => {
 		if (request.prompt === '') {
-			stream.markdown('Enter the question about an image.');
+			stream.markdown('Enter a question about an image.');
 			return { result: '' };
 		}
 
@@ -156,6 +156,20 @@ export function activate(context: vscode.ExtensionContext) {
 		return [imageDataURL, smallImagePath]
 	}
 
+	async function showPreview(arg: string): Promise<void> {
+		let htmlSource = removeFirstAndLastLine(arg);
+		// TODO Hack
+		let workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+		const filePath = path.join(workspacePath!, 'preview.html');
+		await fs.writeFile(filePath, htmlSource);
+		const uri = vscode.Uri.file(filePath);
+		await vscode.commands.executeCommand('vscode.open', uri);
+		// using https://marketplace.visualstudio.com/items?itemName=ms-vscode.live-server
+		await vscode.commands.executeCommand('livePreview.start.preview.atFile');
+		// using live server extension: https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer
+		// await vscode.commands.executeCommand('extension.liveServer.goOnline');
+	}
+
 	async function chatAboutImage(): Promise<void> {
 		let filePath = getFilePathOfImage();
 
@@ -165,19 +179,6 @@ export function activate(context: vscode.ExtensionContext) {
 			isPartialQuery: true
 		};
 		await vscode.commands.executeCommand(commandId, options);
-	}
-
-	async function showPreview(arg: string): Promise<void> {
-		let htmlSource = removeFirstAndLastLine(arg);
-		// TODO Hack
-		let workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-		const filePath = path.join(workspacePath!, 'preview.html');
-		await fs.writeFile(filePath, htmlSource);
-		const uri = vscode.Uri.file(filePath);
-		await vscode.commands.executeCommand('vscode.open', uri);
-		await vscode.commands.executeCommand('livePreview.start.preview.atFile');
-		// using live server extension
-		// await vscode.commands.executeCommand('extension.liveServer.goOnline');
 	}
 
 	function getFilePathOfImage(): string | undefined {
