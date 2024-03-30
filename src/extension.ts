@@ -13,6 +13,8 @@ import OpenAI from 'openai';
 
 const VISION_PARTICIPANT_ID = 'vision-participant.particpant';
 const CHAT_ABOUT_IMAGE_COMMAND_ID = 'vision-participant.chatCommand';
+const PREVIEW_COMMAND_ID = 'vision-participant.preview';
+
 const VISION_PARTICIPANT_TMP_DIR = 'vison-participant';
 
 const SYSTEM_MESSAGE =
@@ -26,6 +28,10 @@ const SYSTEM_MESSAGE =
 	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
 	`3. Avoid wrapping the whole response in triple backticks.\n`;
 
+interface VisionChatResult extends vscode.ChatResult {
+	result: string;
+}
+
 // Enable that the OPENAI_API_KEY can also be set in ~/.env
 dotenv.config({ path: `${os.homedir()}/.env` });
 
@@ -33,10 +39,10 @@ const openai = new OpenAI();
 
 export function activate(context: vscode.ExtensionContext) {
 
-	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> => {
+	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<VisionChatResult> => {
 		if (request.prompt === '') {
 			stream.markdown('Enter the question about an image.');
-			return {};
+			return { result: '' };
 		}
 
 		let [filePath, finalPrompt] = extractImagePathFromPrompt(request.prompt);
@@ -48,14 +54,14 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			});
 			if (!fileUri || !fileUri[0]) {
-				return {};
+				return { result: '' };
 			}
 			filePath = fileUri[0].fsPath;
 		}
 
 		let [imageDataURL, smallImagePath] = await processImage(filePath);
 		if (!imageDataURL || !smallImagePath) {
-			return { errorDetails: { message: 'Failed to process the image.' } };
+			return { result: '', errorDetails: { message: 'Failed to process the image.' } };
 		}
 
 		stream.markdown(`\n![image](file://${smallImagePath})\n`);
@@ -87,11 +93,29 @@ export function activate(context: vscode.ExtensionContext) {
 			max_tokens: 800,
 		});
 
+		let responseText = '';
+
 		for await (const part of response) {
-			stream.markdown(part.choices[0]?.delta?.content || '');
+			const delta = part.choices[0]?.delta?.content || '';
+			responseText += delta;
+			stream.markdown(delta);
 		}
 
-		return {};
+		// show preview button if there is a single html code block
+		if (responseText.length > 0) {
+			let codeBlocks = extractAllMarkdownCodeBlocks(responseText);
+			if (codeBlocks.length === 1) {
+				let language = getLanguageFromMarkdownCodeBlock(codeBlocks[0]);
+				if (language === 'html') {
+					stream.button({
+						command: PREVIEW_COMMAND_ID,
+						arguments: [codeBlocks[0]],
+						title: vscode.l10n.t('Preview')
+					});
+				}
+			}
+		}
+		return { result: responseText };
 	}
 
 	const visionParticipant = vscode.chat.createChatParticipant(VISION_PARTICIPANT_ID, handler);
@@ -99,7 +123,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		visionParticipant,
-		vscode.commands.registerCommand(CHAT_ABOUT_IMAGE_COMMAND_ID, chatAboutImage)
+		vscode.commands.registerCommand(CHAT_ABOUT_IMAGE_COMMAND_ID, chatAboutImage),
+		vscode.commands.registerCommand(PREVIEW_COMMAND_ID, showPreview),
 	);
 
 	function extractImagePathFromPrompt(prompt: string): [string | undefined, string | undefined] {
@@ -140,6 +165,19 @@ export function activate(context: vscode.ExtensionContext) {
 			isPartialQuery: true
 		};
 		await vscode.commands.executeCommand(commandId, options);
+	}
+
+	async function showPreview(arg: string): Promise<void> {
+		let htmlSource = removeFirstAndLastLine(arg);
+		// TODO Hack
+		let workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+		const filePath = path.join(workspacePath!, 'preview.html');
+		await fs.writeFile(filePath, htmlSource);
+		const uri = vscode.Uri.file(filePath);
+		await vscode.commands.executeCommand('vscode.open', uri);
+		await vscode.commands.executeCommand('livePreview.start.preview.atFile');
+		// using live server extension
+		// await vscode.commands.executeCommand('extension.liveServer.goOnline');
 	}
 
 	function getFilePathOfImage(): string | undefined {
@@ -185,6 +223,25 @@ export function activate(context: vscode.ExtensionContext) {
 			await fs.mkdir(tempDir, { recursive: true });
 		}
 		return tempFileWithoutExtension;
+	}
+
+	function extractAllMarkdownCodeBlocks(markdown: string): string[] {
+		const codeBlockRegex = /```[\s\S]*?```/g;
+		const codeBlocks = markdown.match(codeBlockRegex);
+		return codeBlocks || [];
+	}
+
+	function getLanguageFromMarkdownCodeBlock(codeBlock: string): string | null {
+		const languageRegex = /```(\S*)[\s\S]*?```/;
+		const match = codeBlock.match(languageRegex);
+		return match && match[1] ? match[1] : null;
+	}
+
+	function removeFirstAndLastLine(text: string): string {
+		const lines = text.split('\n');
+		lines.shift();
+		lines.pop();
+		return lines.join('\n');
 	}
 }
 
