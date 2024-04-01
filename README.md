@@ -11,9 +11,11 @@ The HTML preview support requires that the [Microsoft Live Preview](https://mark
 
 ## Usage
 
-In the chat view you can activate the particupant using `@vision` and enter a question about an image. If there is no image reference in the prompt, the participant will ask for one.
+In the chat view you can activate the particupant using `@vision` and enter a question about an image. If there is no image reference in the prompt (`#image`), the participant will prompt for an image using a file dialog.
 
-From an open `.png` file you use the CoPilot icon to initiate a chat about the image. 
+From an open `.png` file you can use the CoPilot icon in the editor toolbar to initiate a chat about the image shown in the editor. 
+
+When the response from the model includes a single html code block in the response, then the chat provides a 'Preview' button to preview the page in the simple browser.
 
 ## Examples
 
