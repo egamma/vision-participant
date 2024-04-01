@@ -10,7 +10,6 @@ import * as crypto from 'crypto';
 import * as dotenv from 'dotenv';
 import sharp from 'sharp';
 import OpenAI from 'openai';
-import { text } from 'stream/consumers';
 
 const VISION_PARTICIPANT_ID = 'vision-participant.particpant';
 const CHAT_ABOUT_IMAGE_COMMAND_ID = 'vision-participant.chatCommand';
@@ -128,7 +127,7 @@ interface VisionChatResult extends vscode.ChatResult {
 class VisionChatCodeBlocks {
 	private codeBlocks: string[] = [];
 
-	constructor(public response: string) {
+	constructor(response: string) {
 		this.codeBlocks = this.extractAllMarkdownCodeBlocks(response);
 	}
 
@@ -145,6 +144,7 @@ class VisionChatCodeBlocks {
 
 	getPlainBlock(index: number): string {
 		let block = this.codeBlocks[index];
+		// remove first and last line
 		const lines = block.split('\n');
 		lines.shift();
 		lines.pop();
@@ -239,13 +239,14 @@ export function activate(context: vscode.ExtensionContext) {
 	* Commands
 	*/
 	async function showPreview(arg: string): Promise<void> {
-		let htmlSource =arg;
+		let htmlSource = arg;
 
 		// TODO Hack for creating a temporary file and opening it in the browser
 		let workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 		const filePath = path.join(workspacePath!, 'preview.html');
 		await fs.writeFile(filePath, htmlSource);
 		const uri = vscode.Uri.file(filePath);
+
 		await vscode.commands.executeCommand('vscode.open', uri);
 		// using https://marketplace.visualstudio.com/items?itemName=ms-vscode.live-server
 		await vscode.commands.executeCommand('livePreview.start.preview.atFile');
@@ -255,7 +256,6 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function chatAboutImage(): Promise<void> {
-
 		function getFilePathFromEditor(): string | undefined {
 			const editor = vscode.window.activeTextEditor;
 			if (editor) {
