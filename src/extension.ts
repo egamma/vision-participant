@@ -12,6 +12,7 @@ import sharp from 'sharp';
 import OpenAI from 'openai';
 
 const VISION_PARTICIPANT_ID = 'vision-participant.particpant';
+
 const CHAT_ABOUT_IMAGE_COMMAND_ID = 'vision-participant.chatCommand';
 const PREVIEW_COMMAND_ID = 'vision-participant.previewCommand';
 
@@ -245,9 +246,10 @@ export function activate(context: vscode.ExtensionContext) {
 		let workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 		const filePath = path.join(workspacePath!, 'preview.html');
 		await fs.writeFile(filePath, htmlSource);
-		const uri = vscode.Uri.file(filePath);
 
+		const uri = vscode.Uri.file(filePath);
 		await vscode.commands.executeCommand('vscode.open', uri);
+
 		// using https://marketplace.visualstudio.com/items?itemName=ms-vscode.live-server
 		await vscode.commands.executeCommand('livePreview.start.preview.atFile');
 
@@ -256,7 +258,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function chatAboutImage(): Promise<void> {
-		function getFilePathFromEditor(): string | undefined {
+		function getImagePath(): string | undefined {
 			const editor = vscode.window.activeTextEditor;
 			if (editor) {
 				return editor.document.uri.fsPath;
@@ -272,11 +274,11 @@ export function activate(context: vscode.ExtensionContext) {
 			return undefined
 		}
 
-		let filePath = getFilePathFromEditor();
+		let path = getImagePath();
 
 		const commandId = 'workbench.action.chat.open';
 		const options = {
-			query: `@vision #image:${filePath} `,
+			query: `@vision #image:${path} `,
 			isPartialQuery: true
 		};
 		await vscode.commands.executeCommand(commandId, options);
