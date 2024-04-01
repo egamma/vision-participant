@@ -37,6 +37,93 @@ dotenv.config({ path: `${os.homedir()}/.env` });
 
 const openai = new OpenAI();
 
+class ChatImage {
+
+	constructor(
+		public imagePath: string | undefined = undefined,
+		public promptWithoutVariable: string | undefined = undefined,
+		public dataURL: string | undefined = undefined,
+		public smallImagePath: string | undefined = undefined,
+		public errorMessage: string | undefined = undefined
+	) { }
+
+	public async createImageFromPrompt(prompt: string) {
+		this.extractImagePathFromPrompt(prompt);
+		if (!this.imagePath) {
+			let fileUri = await vscode.window.showOpenDialog({
+				canSelectMany: false,
+				filters: {
+					'Images': ['png']
+				}
+			});
+			if (!fileUri || !fileUri[0]) {
+				this.imagePath = undefined;
+				return;
+			}
+			this.imagePath = fileUri[0].fsPath;
+		}
+		await this.processImage(this.imagePath);
+	}
+
+	private extractImagePathFromPrompt(prompt: string) {
+		const imagePathRegex = /#image:\S+/;
+		const match = prompt.match(imagePathRegex);
+		if (match) {
+			this.imagePath = match[0].replace('#image:', '');
+			this.promptWithoutVariable = prompt.replace(match[0], '');
+		} else {
+			this.promptWithoutVariable = prompt;
+		}
+	}
+
+	private async processImage(filePath: string) {
+		try {
+			let imageBuffer;
+			imageBuffer = await fs.readFile(filePath);
+			this.dataURL = await this.getDataURL(imageBuffer);
+			if (!this.dataURL) {
+				return;
+			}
+			this.smallImagePath = await this.createSmallImage(imageBuffer);
+		} catch (err) {
+			if (err instanceof Error) {
+				this.errorMessage = err.message;
+			} else {
+				this.errorMessage = 'unkown error';
+			}
+		};
+	}
+
+	private async getDataURL(imageBuffer: Buffer): Promise<string> {
+		let buffer = await sharp(imageBuffer).toBuffer();
+		let base64Image = buffer.toString('base64');
+		let dataUrl = 'data:image/png;base64,' + base64Image;
+		return dataUrl;
+	}
+
+	private async createSmallImage(imageBuffer: Buffer): Promise<string> {
+		const tempFileWithoutExtension = await this.getTmpFileName();
+		const smallFilePath = tempFileWithoutExtension + '-small.png';
+
+		await sharp(imageBuffer)
+			.resize({ width: 400 })
+			.toFile(smallFilePath);
+		return smallFilePath;
+	}
+
+	private async getTmpFileName(): Promise<string> {
+		const randomFileName = crypto.randomBytes(20).toString('hex');
+		const tempFileWithoutExtension = path.join(os.tmpdir(), VISION_PARTICIPANT_TMP_DIR, `${randomFileName}`);
+		const tempDir = path.dirname(tempFileWithoutExtension);
+		try {
+			await fs.access(tempDir);
+		} catch (err) {
+			await fs.mkdir(tempDir, { recursive: true });
+		}
+		return tempFileWithoutExtension;
+	}
+}
+
 export function activate(context: vscode.ExtensionContext) {
 
 	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<VisionChatResult> => {
@@ -45,26 +132,16 @@ export function activate(context: vscode.ExtensionContext) {
 			return { result: '' };
 		}
 
-		let [filePath, finalPrompt] = extractImagePathFromPrompt(request.prompt);
-		if (!filePath) {
-			let fileUri = await vscode.window.showOpenDialog({
-				canSelectMany: false,
-				filters: {
-					'Images': ['png']
-				}
-			});
-			if (!fileUri || !fileUri[0]) {
-				return { result: '' };
-			}
-			filePath = fileUri[0].fsPath;
+		let chatImage = new ChatImage();
+		await chatImage.createImageFromPrompt(request.prompt);
+		if (!chatImage.imagePath) {
+			return { result: '' };
+		}
+		if (!chatImage.dataURL) {
+			return { result: '', errorDetails: { message: `Failed to process the image (${chatImage.errorMessage}).` } };
 		}
 
-		let [imageDataURL, smallImagePath] = await processImage(filePath);
-		if (!imageDataURL || !smallImagePath) {
-			return { result: '', errorDetails: { message: 'Failed to process the image.' } };
-		}
-
-		stream.markdown(`\n![image](file://${smallImagePath})\n`);
+		stream.markdown(`\n![image](file://${chatImage.smallImagePath})\n`);
 
 		const response = await openai.chat.completions.create({
 			model: "gpt-4-vision-preview",
@@ -78,12 +155,12 @@ export function activate(context: vscode.ExtensionContext) {
 					content: [
 						{
 							type: "text",
-							text: `${finalPrompt}`
+							text: `${chatImage.promptWithoutVariable}`
 						},
 						{
 							type: "image_url",
 							image_url: {
-								"url": imageDataURL,
+								"url": chatImage.dataURL,
 							},
 						},
 					],
@@ -127,35 +204,6 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(PREVIEW_COMMAND_ID, showPreview),
 	);
 
-	function extractImagePathFromPrompt(prompt: string): [string | undefined, string | undefined] {
-		const imagePathRegex = /#image:\S+/;
-		const match = prompt.match(imagePathRegex);
-		if (match) {
-			const filePath = match[0].replace('#image:', '');
-			const finalPrompt = prompt.replace(match[0], '');
-			return [filePath, finalPrompt];
-		} else {
-			return [undefined, prompt];
-		}
-	}
-
-	async function processImage(filePath: string): Promise<[string | undefined, string | undefined]> {
-		let smallImagePath;
-		let imageDataURL;
-		try {
-			let imageBuffer;
-			imageBuffer = await fs.readFile(filePath);
-			imageDataURL = await getDataURL(imageBuffer);
-			if (!imageDataURL) {
-				return [undefined, undefined];
-			}
-			smallImagePath = await createSmallImage(imageBuffer);
-		} catch (err) {
-			return [undefined, undefined]
-		};
-		return [imageDataURL, smallImagePath]
-	}
-
 	async function showPreview(arg: string): Promise<void> {
 		let htmlSource = removeFirstAndLastLine(arg);
 		// TODO Hack
@@ -171,7 +219,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function chatAboutImage(): Promise<void> {
-		let filePath = getFilePathOfImage();
+		let filePath = getFilePathFromEditor();
 
 		const commandId = 'workbench.action.chat.open';
 		const options = {
@@ -181,12 +229,12 @@ export function activate(context: vscode.ExtensionContext) {
 		await vscode.commands.executeCommand(commandId, options);
 	}
 
-	function getFilePathOfImage(): string | undefined {
+	function getFilePathFromEditor(): string | undefined {
 		const editor = vscode.window.activeTextEditor;
 		if (editor) {
 			return editor.document.uri.fsPath;
 		}
-		// The editors showing a png file are custom editors. Therefore
+		// The editors showing an image file are custom editors. Therefore
 		// get the file path from the active tab
 		let tab = vscode.window.tabGroups.activeTabGroup.activeTab;
 		if (tab) {
@@ -195,35 +243,6 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 		return undefined
-	}
-
-	async function getDataURL(imageBuffer: Buffer): Promise<string> {
-		let buffer = await sharp(imageBuffer).toBuffer();
-		let base64Image = buffer.toString('base64');
-		let dataUrl = 'data:image/png;base64,' + base64Image;
-		return dataUrl;
-	}
-
-	async function createSmallImage(imageBuffer: Buffer): Promise<string> {
-		const tempFileWithoutExtension = await getTmpFileName();
-		const smallFilePath = tempFileWithoutExtension + '-small.png';
-
-		await sharp(imageBuffer)
-			.resize({ width: 400 })
-			.toFile(smallFilePath);
-		return smallFilePath;
-	}
-
-	async function getTmpFileName(): Promise<string> {
-		const randomFileName = crypto.randomBytes(20).toString('hex');
-		const tempFileWithoutExtension = path.join(os.tmpdir(), VISION_PARTICIPANT_TMP_DIR, `${randomFileName}`);
-		const tempDir = path.dirname(tempFileWithoutExtension);
-		try {
-			await fs.access(tempDir);
-		} catch (err) {
-			await fs.mkdir(tempDir, { recursive: true });
-		}
-		return tempFileWithoutExtension;
 	}
 
 	function extractAllMarkdownCodeBlocks(markdown: string): string[] {
