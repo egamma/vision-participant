@@ -66,7 +66,11 @@ class ChatImage {
 		const imagePathRegex = /#image:\S+/;
 		const match = prompt.match(imagePathRegex);
 		if (match) {
-			this.imagePath = match[0].replace('#image:', '');
+			let relativePath = match[0].replace('#image:', '');
+			// if the path has not changed convert it to an absolute path
+			if (relativePath === getImagePathFromWindow(PathType.Relative)) {
+				this.imagePath = getImagePathFromWindow(PathType.Absolute);
+			}
 			this.promptWithoutVariable = prompt.replace(match[0], '');
 		} else {
 			this.promptWithoutVariable = prompt;
@@ -258,23 +262,8 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function chatAboutImage(): Promise<void> {
-		function getImagePath(): string | undefined {
-			const editor = vscode.window.activeTextEditor;
-			if (editor) {
-				return editor.document.uri.fsPath;
-			}
-			// The editors showing an image file are custom editors. Therefore
-			// get the file path from the active tab
-			let tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-			if (tab) {
-				if (tab.input instanceof vscode.TabInputCustom) {
-					return tab.input.uri.fsPath;
-				}
-			}
-			return undefined
-		}
-
-		let path = getImagePath();
+		// show the user the relative path of the image
+		let path = getImagePathFromWindow(PathType.Relative);
 
 		const commandId = 'workbench.action.chat.open';
 		const options = {
@@ -283,6 +272,35 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 		await vscode.commands.executeCommand(commandId, options);
 	}
+}
+
+enum PathType {
+    Absolute = 'absolute',
+    Relative = 'relative'
+}
+
+function getImagePathFromWindow(type: PathType): string | undefined {
+	let uri;
+	const editor = vscode.window.activeTextEditor;
+	if (editor) {
+		uri = editor.document.uri;
+	} else {
+		// The editors showing an image file are custom editors. Therefore
+		// get the file path from the active tab
+		let tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+		if (tab) {
+			if (tab.input instanceof vscode.TabInputCustom) {
+				uri = tab.input.uri;
+			}
+		}
+	}
+	if (uri) {
+		if (type === PathType.Relative) {
+			return vscode.workspace.asRelativePath(uri.fsPath);
+		}
+		return uri.fsPath;
+	}
+	return undefined
 }
 
 export function deactivate() { }
