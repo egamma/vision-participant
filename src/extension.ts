@@ -66,10 +66,11 @@ class ChatImage {
 		const imagePathRegex = /#image:\S+/;
 		const match = prompt.match(imagePathRegex);
 		if (match) {
-			let relativePath = match[0].replace('#image:', '');
-			// if the path has not changed convert it to an absolute path
-			if (relativePath === getImagePathFromWindow(PathType.Relative)) {
-				this.imagePath = getImagePathFromWindow(PathType.Absolute);
+			this.imagePath = match[0].replace('#image:', '');
+			if (!path.isAbsolute(this.imagePath)) {
+				if (this.imagePath === getImagePathFromWindow(PathType.Relative)) {
+					this.imagePath = getImagePathFromWindow(PathType.Absolute);
+				}
 			}
 			this.promptWithoutVariable = prompt.replace(match[0], '');
 		} else {
