@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import { promises as fs } from 'fs';
 
-import * as path from 'path';
+import path, * as path from 'path';
 import * as crypto from 'crypto';
 
 import * as dotenv from 'dotenv';
@@ -68,9 +68,7 @@ class ChatImage {
 		if (match) {
 			this.imagePath = match[0].replace('#image:', '');
 			if (!path.isAbsolute(this.imagePath)) {
-				if (this.imagePath === getImagePathFromWindow(PathType.Relative)) {
-					this.imagePath = getImagePathFromWindow(PathType.Absolute);
-				}
+				this.imagePath = this.getAbsolutePath(this.imagePath) || this.imagePath;
 			}
 			this.promptWithoutVariable = prompt.replace(match[0], '');
 		} else {
@@ -123,6 +121,14 @@ class ChatImage {
 			await fs.mkdir(tempDir, { recursive: true });
 		}
 		return tempFileWithoutExtension;
+	}
+
+	private getAbsolutePath(relativePath: string): string | undefined {
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (workspaceFolder) {
+			return path.join(workspaceFolder.uri.fsPath, relativePath);
+		}
+		return undefined;
 	}
 }
 
@@ -263,8 +269,9 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function chatAboutImage(): Promise<void> {
-		// show the user the relative path of the image
-		let path = getImagePathFromWindow(PathType.Relative);
+		const isMultiRoot = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 1
+		const pathType = isMultiRoot ? PathType.Absolute : PathType.Relative;
+		let path = getImagePathFromWindow(pathType);
 
 		const commandId = 'workbench.action.chat.open';
 		const options = {
