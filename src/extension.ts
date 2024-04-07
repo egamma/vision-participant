@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import { promises as fs } from 'fs';
 
-import path, * as path from 'path';
+import * as path from 'path';
 import * as crypto from 'crypto';
 
 import * as dotenv from 'dotenv';
