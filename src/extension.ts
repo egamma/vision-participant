@@ -187,7 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return { result: '', errorDetails: { message: `Failed to process the image (${chatImage.errorMessage}).` } };
 		}
 
-		stream.markdown(`\n![image](file://${chatImage.smallImagePath})\n`);
+		stream.markdown(`\n![image](file://${chatImage.smallImagePath})  \n`);
 
 		const response = await openai.chat.completions.create({
 			model: "gpt-4-vision-preview",
