@@ -44,8 +44,8 @@ class ChatImage {
 		public errorMessage: string | undefined = undefined
 	) { }
 
-	public async createImageFromPrompt(prompt: string) {
-		this.extractImagePathFromPrompt(prompt);
+	public async createImageFromPrompt(request: vscode.ChatRequest) {
+		this.extractImagePathFromPrompt(request);
 		if (!this.imagePath) {
 			let fileUri = await vscode.window.showOpenDialog({
 				canSelectMany: false,
@@ -62,17 +62,26 @@ class ChatImage {
 		await this.processImage(this.imagePath);
 	}
 
-	private extractImagePathFromPrompt(prompt: string) {
-		const imagePathRegex = /#image:\S+/;
-		const match = prompt.match(imagePathRegex);
-		if (match) {
-			this.imagePath = match[0].replace('#image:', '');
-			if (!path.isAbsolute(this.imagePath)) {
-				this.imagePath = this.getAbsolutePath(this.imagePath) || this.imagePath;
-			}
-			this.promptWithoutVariable = prompt.replace(match[0], '');
+	private extractImagePathFromPrompt(request: vscode.ChatRequest) {
+		const fileVariable = request.variables?.find(variable => variable.name.startsWith('file'));
+		if (fileVariable) {
+			const s = request.prompt;
+			const start = fileVariable.range![0];
+			const end = fileVariable.range![1];
+			this.imagePath = (fileVariable.values[0].value as vscode.Uri).fsPath;
+			this.promptWithoutVariable = s.substring(0, start) + s.substring(end);
 		} else {
-			this.promptWithoutVariable = prompt;
+			const imagePathRegex = /#image:\S+/;
+			const match = request.prompt.match(imagePathRegex);
+			if (match) {
+				this.imagePath = match[0].replace('#image:', '');
+				if (!path.isAbsolute(this.imagePath)) {
+					this.imagePath = this.getAbsolutePath(this.imagePath) || this.imagePath;
+				}
+				this.promptWithoutVariable = request.prompt.replace(match[0], '');
+			} else {
+				this.promptWithoutVariable = request.prompt;
+			}
 		}
 	}
 
@@ -179,7 +188,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		let chatImage = new ChatImage();
-		await chatImage.createImageFromPrompt(request.prompt);
+		await chatImage.createImageFromPrompt(request);
 		if (!chatImage.imagePath) {
 			return { result: '' };
 		}
@@ -283,8 +292,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 enum PathType {
-    Absolute = 'absolute',
-    Relative = 'relative'
+	Absolute = 'absolute',
+	Relative = 'relative'
 }
 
 function getImagePathFromWindow(type: PathType): string | undefined {
