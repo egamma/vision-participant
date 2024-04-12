@@ -118,15 +118,7 @@ class ChatImage {
 
  private async createSmallImage(imageBuffer: Buffer): Promise<string> {
      const tempFileWithoutExtension = await this.getTmpFileName();
-     let extension = '.png'; // Default to .png if no imagePath is provided
-     if (this.imagePath) {
-         const imagePathLower = this.imagePath.toLowerCase();
-         if (imagePathLower.endsWith('.jpg') || imagePathLower.endsWith('.jpeg')) {
-             extension = '.jpg';
-         } else if (imagePathLower.endsWith('.png')) {
-             extension = '.png';
-         }
-     }
+     const extension = this.imagePath ? path.extname(this.imagePath) : '.png';
      const smallFilePath = tempFileWithoutExtension + '-small' + extension;
 
      try {
