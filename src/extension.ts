@@ -116,16 +116,21 @@ class ChatImage {
      return dataUrl;
  }
 
-	private async createSmallImage(imageBuffer: Buffer): Promise<string> {
-		const tempFileWithoutExtension = await this.getTmpFileName();
-		const extension = this.imagePath ? path.extname(this.imagePath) : '.png';
-		const smallFilePath = tempFileWithoutExtension + '-small' + extension;
+ private async createSmallImage(imageBuffer: Buffer): Promise<string> {
+     const tempFileWithoutExtension = await this.getTmpFileName();
+     const extension = this.imagePath ? path.extname(this.imagePath) : '.png';
+     const smallFilePath = tempFileWithoutExtension + '-small' + extension;
 
-		await sharp(imageBuffer)
-			.resize({ width: 400 })
-			.toFile(smallFilePath);
-		return smallFilePath;
-	}
+     try {
+         await sharp(imageBuffer)
+             .resize({ width: 400 })
+             .toFile(smallFilePath);
+         return smallFilePath;
+     } catch (error) {
+         this.errorMessage = `Failed to create small image: ${error}`;
+         return '';
+     }
+ }
 
 	private async getTmpFileName(): Promise<string> {
 		const randomFileName = crypto.randomBytes(20).toString('hex');
