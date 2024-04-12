@@ -44,23 +44,23 @@ class ChatImage {
 		public errorMessage: string | undefined = undefined
 	) { }
 
-	public async createImageFromPrompt(request: vscode.ChatRequest) {
-		this.extractImagePathFromPrompt(request);
-		if (!this.imagePath) {
-			let fileUri = await vscode.window.showOpenDialog({
-				canSelectMany: false,
-				filters: {
-					'Images': ['png']
-				}
-			});
-			if (!fileUri || !fileUri[0]) {
-				this.imagePath = undefined;
-				return;
-			}
-			this.imagePath = fileUri[0].fsPath;
-		}
-		await this.processImage(this.imagePath);
-	}
+ public async createImageFromPrompt(request: vscode.ChatRequest) {
+ 	this.extractImagePathFromPrompt(request);
+ 	if (!this.imagePath) {
+ 		let fileUri = await vscode.window.showOpenDialog({
+ 			canSelectMany: false,
+ 			filters: {
+ 				'Images': ['png', 'jpg', 'jpeg']
+ 			}
+ 		});
+ 		if (!fileUri || !fileUri[0]) {
+ 			this.imagePath = undefined;
+ 			return;
+ 		}
+ 		this.imagePath = fileUri[0].fsPath;
+ 	}
+ 	await this.processImage(this.imagePath);
+ }
 
 	private extractImagePathFromPrompt(request: vscode.ChatRequest) {
 		const fileVariable = request.variables?.find(variable => variable.name.startsWith('file'));
@@ -89,7 +89,9 @@ class ChatImage {
 		try {
 			let imageBuffer;
 			imageBuffer = await fs.readFile(filePath);
-			this.dataURL = await this.getDataURL(imageBuffer);
+			if (this.imagePath) {
+			    this.dataURL = await this.getDataURL(imageBuffer, this.imagePath);
+			}
 			if (!this.dataURL) {
 				return;
 			}
@@ -103,16 +105,21 @@ class ChatImage {
 		};
 	}
 
-	private async getDataURL(imageBuffer: Buffer): Promise<string> {
-		let buffer = await sharp(imageBuffer).toBuffer();
-		let base64Image = buffer.toString('base64');
-		let dataUrl = 'data:image/png;base64,' + base64Image;
-		return dataUrl;
-	}
+ private async getDataURL(imageBuffer: Buffer, imagePath: string): Promise<string> {
+     let buffer = await sharp(imageBuffer).toBuffer();
+     let base64Image = buffer.toString('base64');
+     let mimeType = 'image/png'; // Default MIME type
+     if (imagePath.endsWith('.jpg') || imagePath.endsWith('.jpeg')) {
+         mimeType = 'image/jpeg';
+     }
+     let dataUrl = `data:${mimeType};base64,${base64Image}`;
+     return dataUrl;
+ }
 
 	private async createSmallImage(imageBuffer: Buffer): Promise<string> {
 		const tempFileWithoutExtension = await this.getTmpFileName();
-		const smallFilePath = tempFileWithoutExtension + '-small.png';
+		const extension = this.imagePath ? path.extname(this.imagePath) : '.png';
+		const smallFilePath = tempFileWithoutExtension + '-small' + extension;
 
 		await sharp(imageBuffer)
 			.resize({ width: 400 })
