@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 
 import * as os from 'os';
@@ -50,7 +49,7 @@ class ChatImage {
 			let fileUri = await vscode.window.showOpenDialog({
 				canSelectMany: false,
 				filters: {
-					'Images': ['png']
+					'Images': ['png', 'jpg']
 				}
 			});
 			if (!fileUri || !fileUri[0]) {
@@ -106,7 +105,7 @@ class ChatImage {
 	private async getDataURL(imageBuffer: Buffer): Promise<string> {
 		let buffer = await sharp(imageBuffer).toBuffer();
 		let base64Image = buffer.toString('base64');
-		let dataUrl = 'data:image/png;base64,' + base64Image;
+		let dataUrl = `data:image/${path.extname(filePath).slice(1)};base64,` + base64Image;
 		return dataUrl;
 	}
 
