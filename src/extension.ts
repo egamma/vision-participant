@@ -63,12 +63,12 @@ class ChatImage {
 	}
 
 	private extractImagePathFromPrompt(request: vscode.ChatRequest) {
-		const fileVariable = request.variables?.find(variable => variable.name.startsWith('file'));
+		const fileVariable = request.references?.find(variable => variable.id.startsWith('vscode.file'));
 		if (fileVariable) {
 			const s = request.prompt;
 			const start = fileVariable.range![0];
 			const end = fileVariable.range![1];
-			this.imagePath = (fileVariable.values[0].value as vscode.Uri).fsPath;
+			this.imagePath = (fileVariable.value as vscode.Uri).fsPath;
 			this.promptWithoutVariable = s.substring(0, start) + s.substring(end);
 		} else {
 			const imagePathRegex = /#image:\S+/;
