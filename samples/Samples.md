@@ -2,7 +2,7 @@
 
 Some of these images were inspired by this [twitter thread](https://twitter.com/sairahul1/status/1708704613141270652?s=46&t=XpChoDegS_lURnya5OPlAQ).
 
-| Image | Question |
+| Image | Prompt |
 | --- | --- |
 | `page.png` | Help me create a CSS layout for a web page like the one shown in the image |
 | `sketch.png` | Create this landing page as Next.js page using Tailwind CSS. The sketch in the image represents the contents in the browser window. |
