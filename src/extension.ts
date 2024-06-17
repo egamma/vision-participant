@@ -47,17 +47,28 @@ class ChatImage {
 	public async createImageFromPrompt(request: vscode.ChatRequest) {
 		this.extractImagePathFromPrompt(request);
 		if (!this.imagePath) {
-			let fileUri = await vscode.window.showOpenDialog({
-				canSelectMany: false,
-				filters: {
-					'Images': ['png']
+			// if the active tab is an png image, assume the user wants to chat about it
+			let tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+			if (tab?.input instanceof vscode.TabInputCustom) {
+				let uri = tab.input.uri;
+				if (uri?.fsPath.endsWith('.png')) {
+					this.imagePath = uri.fsPath;
 				}
-			});
-			if (!fileUri || !fileUri[0]) {
-				this.imagePath = undefined;
-				return;
+			} 
+			// if there is still no image, prompt the user to select one
+			if (!this.imagePath) {
+				let fileUri = await vscode.window.showOpenDialog({
+					canSelectMany: false,
+					filters: {
+						'Images': ['png']
+					}
+				});
+				if (!fileUri || !fileUri[0]) {
+					this.imagePath = undefined;
+					return;
+				}
+				this.imagePath = fileUri[0].fsPath;
 			}
-			this.imagePath = fileUri[0].fsPath;
 		}
 		await this.processImage(this.imagePath);
 	}
